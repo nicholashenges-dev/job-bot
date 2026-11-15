@@ -25,12 +25,42 @@ bad_tags = {
     "accounting": -10
 }
 
+good_title_keywords = {
+    "backend": 15,
+    "platform": 15,
+    "infrastructure": 12,
+    "devops": 12,
+    "software engineer": 10,
+    "site reliability": 15,
+    "sre": 15
+}
+
+bad_title_keywords = {
+    "product manager": -15,
+    "account manager": -15,
+    "customer success": -15,
+    "recruiter": -20,
+    "business development": -20,
+    "sales": -15
+}
+
+results = []
+
 for job in jobs[1:]:
     tags = job.get("tags", [])
+    title = job.get("position", "").lower()
 
     match_found = False
     bad_match = False
     score = 0
+
+    for keyword in good_title_keywords:
+        if keyword in title:
+         score += good_title_keywords[keyword]
+
+    for keyword in bad_title_keywords:
+        if keyword in title:
+         score += bad_title_keywords[keyword]
 
     for tag in tags:
         if tag.lower() in bad_tags:
@@ -42,9 +72,19 @@ for job in jobs[1:]:
             score += good_tags[tag.lower()]
 
     if match_found and not bad_match:
-        print("------------------")
-        print(f"Score: {score}")
-        print(f"Company: {job.get('company')}")
-        print(f"Position: {job.get('position')}")
-        print(f"Tags: {', '.join(tags)}")
-        print()
+        results.append({
+            "score": score,
+            "company": job.get("company"),
+            "position": job.get("position"),
+            "tags": tags
+        })
+
+results.sort(key=lambda x: x["score"], reverse=True)
+
+for result in results:
+    print("------------------")
+    print(f"Score: {result['score']}")
+    print(f"Company: {result['company']}")
+    print(f"Position: {result['position']}")
+    print(f"Tags: {', '.join(result['tags'])}")
+    print()
