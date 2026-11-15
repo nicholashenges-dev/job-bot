@@ -17,17 +17,28 @@ good_tags = [
     "ops"
 ]
 
+bad_tags = [
+    "marketing",
+    "recruiter",
+    "sales",
+    "customer support",
+    "accounting"
+]
+
 for job in jobs[1:]:
     tags = job.get("tags", [])
 
     match_found = False
+    bad_match = False
 
     for tag in tags:
+        if tag.lower() in bad_tags:
+            bad_match = True
+
         if tag.lower() in good_tags:
             match_found = True
-            break
 
-    if match_found:
+    if match_found and not bad_match:
         print("------------------")
         print(f"Company: {job.get('company')}")
         print(f"Position: {job.get('position')}")
