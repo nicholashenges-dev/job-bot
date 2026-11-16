@@ -44,6 +44,8 @@ bad_title_keywords = {
     "sales": -15
 }
 
+TOP_MATCH_SCORE = 20
+
 results = []
 
 for job in jobs[1:]:
@@ -81,13 +83,38 @@ for job in jobs[1:]:
 
 results.sort(key=lambda x: x["score"], reverse=True)
 
-strong_matches = len(results)
+top_matches = []
+strong_matches = []
 
-print()
-print(f"Strong matches found: {strong_matches}")
-print()
+strong_matches_count = len(results)
 
 for result in results:
+    if result["score"] >= TOP_MATCH_SCORE:
+        top_matches.append(result)
+    else:
+        strong_matches.append(result)
+
+print()
+print(f"Strong matches found: {strong_matches_count}")
+print()
+
+print("TOP MATCHES")
+print("-----------")
+print()
+
+for result in top_matches:
+    print("------------------")
+    print(f"Score: {result['score']}")
+    print(f"Company: {result['company']}")
+    print(f"Position: {result['position']}")
+    print(f"Tags: {', '.join(result['tags'])}")
+    print()
+
+print("OTHER STRONG MATCHES")
+print("--------------------")
+print()
+
+for result in strong_matches:
     if result["score"] < 15:
         continue
 
