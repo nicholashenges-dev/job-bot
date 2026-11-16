@@ -12,6 +12,90 @@ def clean_description(raw_text):
     # 4. Collapse extra spaces and blank lines into clean single spaces
     return re.sub(r"\s+", " ", text).strip()
 
+def score_job(job):
+    tags = job.get("tags", [])
+    title = job.get("title", "").lower()
+    location = job.get("location", "").lower()
+    clean_desc = clean_description(job.get("description", ""))
+    description = clean_desc.lower()
+    full_text = f"{title} {location} {description}"
+
+    # 1. Hard filter: Skip jobs outside US / local area
+    if any(region in full_text for region in DISQUALIFIED_REGIONS):
+        return None
+
+    # 2. Hard filter: Skip jobs requiring 3+ days in office
+    if any(phrase in full_text for phrase in TOO_MANY_OFFICE_DAYS):
+        return None
+
+    # 3. Hard filter: Skip if salary is explicitly listed below $85,000
+    salary_max = job.get("salary_max") or 0
+    if isinstance(salary_max, (int, float)) and 0 < salary_max < MIN_SALARY:
+        return None
+
+    # 4. Hard filter: Skip customer-facing & pure support roles
+    if any(keyword in title for keyword in bad_title_keywords):
+        return None
+    if any(phrase in description for phrase in CUSTOMER_FACING_PHRASES):
+        return None
+
+    # 5. Hard filter: Skip non-full-time, freelance, task-based, and commission roles
+    if any(phrase in full_text for phrase in NON_FULLTIME_PHRASES):
+        return None
+
+    match_found = False
+    bad_match = False
+    score = 0
+
+    # 6. Check if local (within ~25 mins of Hamburg) or Remote
+    is_local = any(city in full_text for city in LOCAL_CITIES)
+    is_hybrid = "hybrid" in full_text
+    is_remote = "remote" in full_text or location == ""
+
+    if is_hybrid and is_local:
+        score += HYBRID_BONUS
+    elif is_hybrid and not is_local and location != "" and "remote" not in location:
+        return None
+    elif is_remote:
+        score += REMOTE_BONUS
+    else:
+        score += ONSITE_PENALTY
+
+    for keyword in good_title_keywords:
+        if keyword in title:
+            match_found = True
+            score += good_title_keywords[keyword]
+
+    for skill, points in resume_skills.items():
+        if skill in description:
+            score += points
+
+    for phrase, points in builder_keywords.items():
+        if phrase in description:
+            score += points
+
+    for tag in tags:
+        if tag.lower() in bad_tags:
+            bad_match = True
+            score += bad_tags[tag.lower()]
+
+        if tag.lower() in good_tags:
+            match_found = True
+            score += good_tags[tag.lower()]
+
+    if match_found and not bad_match:
+        return {
+            "score": score,
+            "company": job.get("company"),
+            "position": job.get("title"),
+            "location": job.get("location"),
+            "url": job.get("url"),
+            "apply_url": job.get("apply_url"),
+            "description": clean_desc,
+            "tags": tags
+        }
+    return None
+
 print("Job Bot Started")
 
 response = requests.get("https://remoteok.com/api")
@@ -153,89 +237,20 @@ NON_FULLTIME_PHRASES = [
 
 results = []
 
-for job in jobs[1:]:
-    tags = job.get("tags", [])
-    title = job.get("position", "").lower()
-    location = job.get("location", "").lower()
-    clean_desc = clean_description(job.get("description", ""))
-    description = clean_desc.lower()
-    full_text = f"{title} {location} {description}"
-
-    # 1. Hard filter: Skip jobs outside US / local area
-    if any(region in full_text for region in DISQUALIFIED_REGIONS):
-        continue
-
-    # 2. Hard filter: Skip jobs requiring 3+ days in office
-    if any(phrase in full_text for phrase in TOO_MANY_OFFICE_DAYS):
-        continue
-
-    # 3. Hard filter: Skip if salary is explicitly listed below $85,000
-    salary_max = job.get("salary_max") or 0
-    if isinstance(salary_max, (int, float)) and 0 < salary_max < MIN_SALARY:
-        continue
-
-    # 4. Hard filter: Skip customer-facing & pure support roles
-    if any(keyword in title for keyword in bad_title_keywords):
-        continue
-    if any(phrase in description for phrase in CUSTOMER_FACING_PHRASES):
-        continue
-
-    # 5. Hard filter: Skip non-full-time, freelance, task-based, and commission roles
-    if any(phrase in full_text for phrase in NON_FULLTIME_PHRASES):
-        continue
-
-    match_found = False
-    bad_match = False
-    score = 0
-
-    #5 . Check if local (within ~25 mins of Hamburg) or Remote
-    is_local = any(city in full_text for city in LOCAL_CITIES)
-    is_hybrid = "hybrid" in full_text
-    is_remote = "remote" in full_text or location == ""
-
-    if is_hybrid and is_local:
-        score += HYBRID_BONUS
-    elif is_hybrid and not is_local and location != "" and "remote" not in location:
-        # Hybrid tied to a specific non-local city (like Palo Alto or Boston)
-        continue
-    elif is_remote:
-        score += REMOTE_BONUS
-    else:
-        score += ONSITE_PENALTY
-
-    for keyword in good_title_keywords:
-        if keyword in title:
-            match_found = True
-            score += good_title_keywords[keyword]
-
-    for skill, points in resume_skills.items():
-        if skill in description:
-            score += points
-
-    for phrase, points in builder_keywords.items():
-        if phrase in description:
-            score += points
-
-    for tag in tags:
-        if tag.lower() in bad_tags:
-            bad_match = True
-            score += bad_tags[tag.lower()]
-
-        if tag.lower() in good_tags:
-            match_found = True
-            score += good_tags[tag.lower()]
-
-    if match_found and not bad_match:
-        results.append({
-            "score": score,
-            "company": job.get("company"),
-            "position": job.get("position"),
-            "location": job.get("location"),
-            "url": job.get("url"),
-            "apply_url": job.get("apply_url"),
-            "description": clean_desc,
-            "tags": tags
-        })
+for raw_job in jobs[1:]:
+    standardized_job = {
+        "company": raw_job.get("company"),
+        "title": raw_job.get("position", ""),
+        "location": raw_job.get("location", ""),
+        "salary_max": raw_job.get("salary_max", 0),
+        "description": raw_job.get("description", ""),
+        "tags": raw_job.get("tags", []),
+        "url": raw_job.get("url"),
+        "apply_url": raw_job.get("apply_url")
+    }
+    scored = score_job(standardized_job)
+    if scored:
+        results.append(scored)
 
 results.sort(key=lambda x: x["score"], reverse=True)
 
