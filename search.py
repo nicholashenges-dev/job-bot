@@ -41,11 +41,21 @@ good_title_keywords = {
 bad_title_keywords = {
     "product manager": -15,
     "account manager": -15,
-    "customer success": -15,
+    "account executive": -20,
+    "customer success": -20,
+    "customer support": -20,
+    "support specialist": -20,
+    "client support": -20,
+    "solutions engineer": -15,
+    "field application": -20,
+    "application support": -20,
+    "production support": -20,
+    "technical support": -20,
     "recruiter": -20,
     "business development": -20,
-    "sales": -15
+    "sales": -20
 }
+
 
 TOP_MATCH_SCORE = 20
 MIN_SALARY = 85000
@@ -73,6 +83,14 @@ TOO_MANY_OFFICE_DAYS = [
     "100% onsite", "100% on-site", "fully onsite", "fully on-site"
 ]
 
+CUSTOMER_FACING_PHRASES = [
+    "customer-facing", "customer facing", "client-facing", "client facing",
+    "outbound calls", "inbound calls", "cold calling", "customer calls",
+    "manage client relationships", "own the commercial relationship",
+    "frontline customer support", "handle customer inquiries"
+]
+
+
 results = []
 
 for job in jobs[1:]:
@@ -95,12 +113,19 @@ for job in jobs[1:]:
     if isinstance(salary_max, (int, float)) and 0 < salary_max < MIN_SALARY:
         continue
 
+    # 4. Hard filter: Skip customer-facing & pure support roles
+    if any(keyword in title for keyword in bad_title_keywords):
+        continue
+    if any(phrase in description for phrase in CUSTOMER_FACING_PHRASES):
+        continue
+
+
 
     match_found = False
     bad_match = False
     score = 0
 
-    #4 . Check if local (within ~25 mins of Hamburg) or Remote
+    #5 . Check if local (within ~25 mins of Hamburg) or Remote
     is_local = any(city in full_text for city in LOCAL_CITIES)
     is_hybrid = "hybrid" in full_text
     is_remote = "remote" in full_text or location == ""
