@@ -48,6 +48,7 @@ bad_title_keywords = {
 }
 
 TOP_MATCH_SCORE = 20
+MIN_SALARY = 85000
 
 REMOTE_BONUS = 20
 HYBRID_BONUS = 10
@@ -89,11 +90,17 @@ for job in jobs[1:]:
     if any(phrase in full_text for phrase in TOO_MANY_OFFICE_DAYS):
         continue
 
+    # 3. Hard filter: Skip if salary is explicitly listed below $85,000
+    salary_max = job.get("salary_max") or 0
+    if isinstance(salary_max, (int, float)) and 0 < salary_max < MIN_SALARY:
+        continue
+
+
     match_found = False
     bad_match = False
     score = 0
 
-    # 3. Check if local (within ~25 mins of Hamburg) or Remote
+    #4 . Check if local (within ~25 mins of Hamburg) or Remote
     is_local = any(city in full_text for city in LOCAL_CITIES)
     is_hybrid = "hybrid" in full_text
     is_remote = "remote" in full_text or location == ""
