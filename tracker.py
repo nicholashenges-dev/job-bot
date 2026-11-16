@@ -55,3 +55,25 @@ def save_job(job, source="remoteok"):
             job.get("description", ""),
             today
         ))
+
+def get_all_jobs():
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.execute("SELECT * FROM jobs ORDER BY score DESC, date_found DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
+def update_job_status(job_id, status, notes="", offer_amount=""):
+    date_applied = datetime.now().strftime("%Y-%m-%d") if status == "applied" else None
+    with sqlite3.connect(DB_FILE) as conn:
+        if date_applied:
+            conn.execute("""
+                UPDATE jobs
+                SET status = ?, notes = ?, offer_amount = ?, date_applied = COALESCE(date_applied, ?)
+                WHERE id = ?
+            """, (status, notes, offer_amount, date_applied, job_id))
+        else:
+            conn.execute("""
+                UPDATE jobs
+                SET status = ?, notes = ?, offer_amount = ?
+                WHERE id = ?
+            """, (status, notes, offer_amount, job_id))
