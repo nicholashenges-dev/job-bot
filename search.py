@@ -81,7 +81,16 @@ for job in jobs[1:]:
 
 results.sort(key=lambda x: x["score"], reverse=True)
 
+strong_matches = len(results)
+
+print()
+print(f"Strong matches found: {strong_matches}")
+print()
+
 for result in results:
+    if result["score"] < 15:
+        continue
+
     print("------------------")
     print(f"Score: {result['score']}")
     print(f"Company: {result['company']}")
