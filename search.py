@@ -2,6 +2,9 @@ import html
 import re
 import requests
 
+from tracker import init_db, job_exists, save_job
+
+
 def clean_description(raw_text):
     # 1. Convert HTML entities like &amp; into normal characters (&)
     text = html.unescape(raw_text)
@@ -235,9 +238,13 @@ NON_FULLTIME_PHRASES = [
     "commission only", "uncapped commission"
 ]
 
+init_db()
 results = []
 
 for raw_job in jobs[1:]:
+    if job_exists(raw_job.get("company"), raw_job.get("position")):
+        continue
+
     standardized_job = {
         "company": raw_job.get("company"),
         "title": raw_job.get("position", ""),
@@ -311,3 +318,11 @@ for result in strong_matches:
 
     print(f"Tags: {', '.join(result['tags'])}")
     print()
+
+new_saved = 0
+for result in results:
+    if result["score"] >= 15:
+        save_job(result, source="remoteok")
+        new_saved += 1
+
+print(f"Saved {new_saved} new matches to jobs.db.")
