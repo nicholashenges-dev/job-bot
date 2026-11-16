@@ -1,4 +1,16 @@
+import html
+import re
 import requests
+
+def clean_description(raw_text):
+    # 1. Convert HTML entities like &amp; into normal characters (&)
+    text = html.unescape(raw_text)
+    # 2. Cut off RemoteOK's "Please mention the word..." spam-check footer
+    text = re.split(r"Please mention the word", text, flags=re.IGNORECASE)[0]
+    # 3. Strip all HTML tags like <p>, <br/>, <strong>
+    text = re.sub(r"<.*?>", " ", text)
+    # 4. Collapse extra spaces and blank lines into clean single spaces
+    return re.sub(r"\s+", " ", text).strip()
 
 print("Job Bot Started")
 
@@ -145,7 +157,8 @@ for job in jobs[1:]:
     tags = job.get("tags", [])
     title = job.get("position", "").lower()
     location = job.get("location", "").lower()
-    description = job.get("description", "").lower()
+    clean_desc = clean_description(job.get("description", ""))
+    description = clean_desc.lower()
     full_text = f"{title} {location} {description}"
 
     # 1. Hard filter: Skip jobs outside US / local area
@@ -220,7 +233,7 @@ for job in jobs[1:]:
             "location": job.get("location"),
             "url": job.get("url"),
             "apply_url": job.get("apply_url"),
-            "description": job.get("description", ""),
+            "description": clean_desc,
             "tags": tags
         })
 
@@ -250,7 +263,9 @@ for result in top_matches:
     print(f"Score: {result['score']}")
     print(f"Company: {result['company']}")
     print(f"Position: {result['position']}")
-    print(f"Location: {result['location']}")
+    print(f"Location: {result['location'] or 'Remote'}")
+    print(f"Apply URL: {result['apply_url']}")
+
 
     print()
     print(result["description"][:1000])
@@ -271,7 +286,9 @@ for result in strong_matches:
     print(f"Score: {result['score']}")
     print(f"Company: {result['company']}")
     print(f"Position: {result['position']}")
-    print(f"Location: {result['location']}")
+    print(f"Location: {result['location'] or 'Remote'}")
+    print(f"Apply URL: {result['apply_url']}")
+
 
     print()
     print(result["description"][:1000])
