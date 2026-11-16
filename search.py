@@ -25,6 +25,7 @@ bad_tags = {
     "recruiter": -10,
     "sales": -8,
     "customer support": -5,
+    "customer service": -5,
     "accounting": -10
 }
 
@@ -55,6 +56,47 @@ bad_title_keywords = {
     "business development": -20,
     "sales": -20
 }
+
+resume_skills = {
+    "sql": 12,
+    "sql server": 15,
+    "ms sql": 15,
+    "postgresql": 10,
+    "postilion": 25,
+    "iso 8583": 25,
+    "payment": 15,
+    "payments": 15,
+    "clearing": 15,
+    "settlement": 15,
+    "visa": 12,
+    "mainframe": 12,
+    "ibm z": 12,
+    "cobol": 10,
+    "python": 10,
+    "api": 8,
+    "rest": 8,
+    "agile": 5,
+    "sdlc": 5
+}
+
+builder_keywords = {
+    "build": 6,
+    "design and implement": 10,
+    "new features": 10,
+    "greenfield": 12,
+    "architecture": 8,
+    "mentorship": 10,
+    "mentor": 8,
+    "learning": 8,
+    "professional development": 8,
+    "vendor patching": -15,
+    "legacy maintenance": -15,
+    "tier 1": -15,
+    "tier 2": -12,
+    "helpdesk": -20,
+    "on-call rotation": -5
+}
+
 
 
 TOP_MATCH_SCORE = 20
@@ -90,6 +132,12 @@ CUSTOMER_FACING_PHRASES = [
     "frontline customer support", "handle customer inquiries"
 ]
 
+NON_FULLTIME_PHRASES = [
+    "task based", "task-based", "paid per task",
+    "1099", "independent contractor", "contractor only",
+    "freelance", "part-time", "part time",
+    "commission only", "uncapped commission"
+]
 
 results = []
 
@@ -119,7 +167,9 @@ for job in jobs[1:]:
     if any(phrase in description for phrase in CUSTOMER_FACING_PHRASES):
         continue
 
-
+    # 5. Hard filter: Skip non-full-time, freelance, task-based, and commission roles
+    if any(phrase in full_text for phrase in NON_FULLTIME_PHRASES):
+        continue
 
     match_found = False
     bad_match = False
@@ -142,11 +192,16 @@ for job in jobs[1:]:
 
     for keyword in good_title_keywords:
         if keyword in title:
-         score += good_title_keywords[keyword]
+            match_found = True
+            score += good_title_keywords[keyword]
 
-    for keyword in bad_title_keywords:
-        if keyword in title:
-         score += bad_title_keywords[keyword]
+    for skill, points in resume_skills.items():
+        if skill in description:
+            score += points
+
+    for phrase, points in builder_keywords.items():
+        if phrase in description:
+            score += points
 
     for tag in tags:
         if tag.lower() in bad_tags:
