@@ -5,6 +5,9 @@ print("Job Bot Started")
 response = requests.get("https://remoteok.com/api")
 jobs = response.json()
 
+print(jobs[1].keys())
+print()
+
 print(f"Retrieved {len(jobs)} records")
 print()
 
@@ -46,15 +49,28 @@ bad_title_keywords = {
 
 TOP_MATCH_SCORE = 20
 
+REMOTE_BONUS = 20
+HYBRID_BONUS = 10
+ONSITE_PENALTY = -25
+
 results = []
 
 for job in jobs[1:]:
     tags = job.get("tags", [])
     title = job.get("position", "").lower()
+    description = job.get("description", "").lower()
 
     match_found = False
     bad_match = False
     score = 0
+
+    if "hybrid" in description:
+        score += HYBRID_BONUS
+    elif "remote" in description:
+        score += REMOTE_BONUS
+
+    if "onsite" in description:
+        score += ONSITE_PENALTY 
 
     for keyword in good_title_keywords:
         if keyword in title:
@@ -78,6 +94,10 @@ for job in jobs[1:]:
             "score": score,
             "company": job.get("company"),
             "position": job.get("position"),
+            "location": job.get("location"),
+            "url": job.get("url"),
+            "apply_url": job.get("apply_url"),
+            "description": job.get("description", ""),
             "tags": tags
         })
 
@@ -107,6 +127,12 @@ for result in top_matches:
     print(f"Score: {result['score']}")
     print(f"Company: {result['company']}")
     print(f"Position: {result['position']}")
+    print(f"Location: {result['location']}")
+
+    print()
+    print(result["description"][:1000])
+    print()
+
     print(f"Tags: {', '.join(result['tags'])}")
     print()
 
@@ -122,5 +148,11 @@ for result in strong_matches:
     print(f"Score: {result['score']}")
     print(f"Company: {result['company']}")
     print(f"Position: {result['position']}")
+    print(f"Location: {result['location']}")
+
+    print()
+    print(result["description"][:1000])
+    print()
+
     print(f"Tags: {', '.join(result['tags'])}")
     print()
