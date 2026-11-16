@@ -53,24 +53,60 @@ REMOTE_BONUS = 20
 HYBRID_BONUS = 10
 ONSITE_PENALTY = -25
 
+LOCAL_CITIES = [
+    "buffalo", "hamburg", "orchard park", "lackawanna", 
+    "west seneca", "cheektowaga", "amherst", "east aurora", "wny"
+]
+
+DISQUALIFIED_REGIONS = [
+    "emea", "latam", "apac", "europe only", "european time zones",
+    "based in the eu", "uk only", "canada only", "philippines",
+    "outside the united states", "outside the us", "germany", "mexico",
+    "berlin", "london", "warsaw", "estonia", "colombia", "brazil",
+    "ireland", "seoul", "southeast asia", "singapore", "india"
+]
+
+
+TOO_MANY_OFFICE_DAYS = [
+    "3 days", "three days", "4 days", "four days", "5 days", "five days",
+    "100% onsite", "100% on-site", "fully onsite", "fully on-site"
+]
+
 results = []
 
 for job in jobs[1:]:
     tags = job.get("tags", [])
     title = job.get("position", "").lower()
+    location = job.get("location", "").lower()
     description = job.get("description", "").lower()
+    full_text = f"{title} {location} {description}"
+
+    # 1. Hard filter: Skip jobs outside US / local area
+    if any(region in full_text for region in DISQUALIFIED_REGIONS):
+        continue
+
+    # 2. Hard filter: Skip jobs requiring 3+ days in office
+    if any(phrase in full_text for phrase in TOO_MANY_OFFICE_DAYS):
+        continue
 
     match_found = False
     bad_match = False
     score = 0
 
-    if "hybrid" in description:
-        score += HYBRID_BONUS
-    elif "remote" in description:
-        score += REMOTE_BONUS
+    # 3. Check if local (within ~25 mins of Hamburg) or Remote
+    is_local = any(city in full_text for city in LOCAL_CITIES)
+    is_hybrid = "hybrid" in full_text
+    is_remote = "remote" in full_text or location == ""
 
-    if "onsite" in description:
-        score += ONSITE_PENALTY 
+    if is_hybrid and is_local:
+        score += HYBRID_BONUS
+    elif is_hybrid and not is_local and location != "" and "remote" not in location:
+        # Hybrid tied to a specific non-local city (like Palo Alto or Boston)
+        continue
+    elif is_remote:
+        score += REMOTE_BONUS
+    else:
+        score += ONSITE_PENALTY
 
     for keyword in good_title_keywords:
         if keyword in title:
