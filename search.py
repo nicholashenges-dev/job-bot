@@ -4,6 +4,7 @@ import requests
 
 from tracker import init_db, job_exists, save_job
 
+from sources import fetch_all_jobs
 
 def clean_description(raw_text):
     # 1. Convert HTML entities like &amp; into normal characters (&)
@@ -26,6 +27,9 @@ def score_job(job):
     # 1. Hard filter: Skip jobs outside US / local area
     if any(region in full_text for region in DISQUALIFIED_REGIONS):
         return None
+    if any(loc in location for loc in DISQUALIFIED_LOCATIONS):
+        return None
+
 
     # 2. Hard filter: Skip jobs requiring 3+ days in office
     if any(phrase in full_text for phrase in TOO_MANY_OFFICE_DAYS):
@@ -88,6 +92,7 @@ def score_job(job):
 
     if match_found and not bad_match:
         return {
+            "source": job.get("source", "unknown"),
             "score": score,
             "company": job.get("company"),
             "position": job.get("title"),
@@ -97,18 +102,10 @@ def score_job(job):
             "description": clean_desc,
             "tags": tags
         }
+
     return None
 
 print("Job Bot Started")
-
-response = requests.get("https://remoteok.com/api")
-jobs = response.json()
-
-print(jobs[1].keys())
-print()
-
-print(f"Retrieved {len(jobs)} records")
-print()
 
 good_tags = {
     "backend": 10,
@@ -218,6 +215,11 @@ DISQUALIFIED_REGIONS = [
     "ireland", "seoul", "southeast asia", "singapore", "india"
 ]
 
+DISQUALIFIED_LOCATIONS = [
+    "canada", "china", "europe", "uk", "united kingdom",
+    "australia", "new zealand", "france", "spain", "poland",
+    "netherlands", "sweden", "japan", "taiwan", "argentina", "chile"
+]
 
 TOO_MANY_OFFICE_DAYS = [
     "3 days", "three days", "4 days", "four days", "5 days", "five days",
@@ -235,27 +237,20 @@ NON_FULLTIME_PHRASES = [
     "task based", "task-based", "paid per task",
     "1099", "independent contractor", "contractor only",
     "freelance", "part-time", "part time",
-    "commission only", "uncapped commission"
+    "commission only", "uncapped commission", "per task", "10 hours"
 ]
+
+jobs = fetch_all_jobs()
+print(f"Retrieved {len(jobs)} total records across all sources\n")
 
 init_db()
 results = []
 
-for raw_job in jobs[1:]:
-    if job_exists(raw_job.get("company"), raw_job.get("position")):
+for job in jobs:
+    if job_exists(job.get("company"), job.get("title")):
         continue
 
-    standardized_job = {
-        "company": raw_job.get("company"),
-        "title": raw_job.get("position", ""),
-        "location": raw_job.get("location", ""),
-        "salary_max": raw_job.get("salary_max", 0),
-        "description": raw_job.get("description", ""),
-        "tags": raw_job.get("tags", []),
-        "url": raw_job.get("url"),
-        "apply_url": raw_job.get("apply_url")
-    }
-    scored = score_job(standardized_job)
+    scored = score_job(job)
     if scored:
         results.append(scored)
 
@@ -322,7 +317,7 @@ for result in strong_matches:
 new_saved = 0
 for result in results:
     if result["score"] >= 15:
-        save_job(result, source="remoteok")
+        save_job(result, source=result.get("source", "unknown"))
         new_saved += 1
 
 print(f"Saved {new_saved} new matches to jobs.db.")
