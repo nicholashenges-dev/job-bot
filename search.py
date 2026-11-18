@@ -1,10 +1,13 @@
 import html
+import json
 import re
 import requests
 
 from tracker import init_db, job_exists, save_job
-
 from sources import fetch_all_jobs
+
+with open("config.json", "r", encoding="utf-8") as f:
+    CONFIG = json.load(f)
 
 def clean_description(raw_text):
     # 1. Convert HTML entities like &amp; into normal characters (&)
@@ -16,7 +19,7 @@ def clean_description(raw_text):
     # 4. Collapse extra spaces and blank lines into clean single spaces
     return re.sub(r"\s+", " ", text).strip()
 
-NTFY_TOPIC = "nbhjobnotify_20261118"
+NTFY_TOPIC = CONFIG.get("ntfy_topic", "")
 
 def send_phone_alert(new_count, top_matches):
     if new_count <= 0:
@@ -148,89 +151,21 @@ bad_tags = {
     "accounting": -10
 }
 
-good_title_keywords = {
-    "backend": 15,
-    "platform": 15,
-    "infrastructure": 12,
-    "devops": 12,
-    "software engineer": 10,
-    "site reliability": 15,
-    "sre": 15
-}
+good_title_keywords = CONFIG.get("good_title_keywords", {})
+bad_title_keywords = CONFIG.get("bad_title_keywords", {})
+resume_skills = CONFIG.get("resume_skills", {})
+builder_keywords = CONFIG.get("builder_keywords", {})
 
-bad_title_keywords = {
-    "product manager": -15,
-    "account manager": -15,
-    "account executive": -20,
-    "customer success": -20,
-    "customer support": -20,
-    "support specialist": -20,
-    "client support": -20,
-    "solutions engineer": -15,
-    "field application": -20,
-    "application support": -20,
-    "production support": -20,
-    "technical support": -20,
-    "recruiter": -20,
-    "business development": -20,
-    "sales": -20,
-    "finance manager": -20,
-    "project manager": -15
-}
-
-resume_skills = {
-    "sql": 12,
-    "sql server": 15,
-    "ms sql": 15,
-    "postgresql": 10,
-    "postilion": 25,
-    "iso 8583": 25,
-    "payment": 15,
-    "payments": 15,
-    "clearing": 15,
-    "settlement": 15,
-    "visa": 12,
-    "mainframe": 12,
-    "ibm z": 12,
-    "cobol": 10,
-    "python": 10,
-    "api": 8,
-    "rest": 8,
-    "agile": 5,
-    "sdlc": 5
-}
-
-builder_keywords = {
-    "build": 6,
-    "design and implement": 10,
-    "new features": 10,
-    "greenfield": 12,
-    "architecture": 8,
-    "mentorship": 10,
-    "mentor": 8,
-    "learning": 8,
-    "professional development": 8,
-    "vendor patching": -15,
-    "legacy maintenance": -15,
-    "tier 1": -15,
-    "tier 2": -12,
-    "helpdesk": -20,
-    "on-call rotation": -5
-}
-
-
-
-TOP_MATCH_SCORE = 20
-MIN_SALARY = 85000
+TOP_MATCH_SCORE = CONFIG.get("top_match_score", 20)
+MIN_SAVE_SCORE = CONFIG.get("min_save_score", 15)
+MIN_SALARY = CONFIG.get("min_salary", 85000)
 
 REMOTE_BONUS = 20
 HYBRID_BONUS = 10
 ONSITE_PENALTY = -25
 
-LOCAL_CITIES = [
-    "buffalo", "hamburg", "orchard park", "lackawanna", 
-    "west seneca", "cheektowaga", "amherst", "east aurora", "wny"
-]
+LOCAL_CITIES = CONFIG.get("local_cities", [])
+
 
 DISQUALIFIED_REGIONS = [
     "emea", "latam", "apac", "europe only", "european time zones",
@@ -344,14 +279,15 @@ def run_search():
 
     new_saved = 0
     for result in results:
-        if result["score"] >= 15:
+        if result["score"] >= MIN_SAVE_SCORE:
             save_job(result, source=result.get("source", "unknown"))
             new_saved += 1
 
     print(f"Saved {new_saved} new matches to jobs.db.")
-    saved_jobs = [r for r in results if r["score"] >= 15]
+    saved_jobs = [r for r in results if r["score"] >= MIN_SAVE_SCORE]
     send_phone_alert(new_saved, saved_jobs)
     return new_saved
+
 
 if __name__ == "__main__":
     print("Job Bot Started")    

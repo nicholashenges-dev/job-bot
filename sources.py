@@ -1,5 +1,7 @@
+import json
 import requests
 import xml.etree.ElementTree as ET
+
 
 
 HEADERS = {
@@ -131,11 +133,12 @@ def fetch_weworkremotely():
 
 def fetch_greenhouse():
     jobs = []
-    # Add or remove any company Greenhouse board slug here
-    companies = [
-        "stripe", "plaid", "cloudflare", "gitlab",
-        "coinbase", "affirm", "datadog", "dropbox"
-    ]
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+        companies = config.get("greenhouse_companies", [])
+    except Exception:
+        companies = ["stripe", "plaid", "cloudflare", "gitlab"]
     base_url = "https://" + "boards-api.greenhouse.io/v1/boards/"
     for slug in companies:
         try:

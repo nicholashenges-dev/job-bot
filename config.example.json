@@ -1,0 +1,80 @@
+{
+  "ntfy_topic": "your-private-ntfy-topic",
+  "min_salary": 85000,
+  "top_match_score": 20,
+  "min_save_score": 15,
+  "local_cities": [
+    "buffalo", "hamburg", "orchard park", "lackawanna",
+    "west seneca", "cheektowaga", "amherst", "east aurora", "wny"
+  ],
+  "greenhouse_companies": [
+    "stripe", "plaid", "cloudflare", "gitlab",
+    "coinbase", "affirm", "datadog", "dropbox"
+  ],
+  "good_title_keywords": {
+    "backend": 15,
+    "platform": 15,
+    "infrastructure": 12,
+    "devops": 12,
+    "software engineer": 10,
+    "site reliability": 15,
+    "sre": 15
+  },
+  "bad_title_keywords": {
+    "product manager": -15,
+    "project manager": -15,
+    "account manager": -15,
+    "account executive": -20,
+    "customer success": -20,
+    "customer support": -20,
+    "support specialist": -20,
+    "client support": -20,
+    "solutions engineer": -15,
+    "field application": -20,
+    "application support": -20,
+    "production support": -20,
+    "technical support": -20,
+    "recruiter": -20,
+    "finance manager": -20,
+    "business development": -20,
+    "sales": -20
+  },
+  "resume_skills": {
+    "sql": 12,
+    "sql server": 15,
+    "ms sql": 15,
+    "postgresql": 10,
+    "postilion": 25,
+    "iso 8583": 25,
+    "payment": 15,
+    "payments": 15,
+    "clearing": 15,
+    "settlement": 15,
+    "visa": 12,
+    "mainframe": 12,
+    "ibm z": 12,
+    "cobol": 10,
+    "python": 10,
+    "api": 8,
+    "rest": 8,
+    "agile": 5,
+    "sdlc": 5
+  },
+  "builder_keywords": {
+    "build": 6,
+    "design and implement": 10,
+    "new features": 10,
+    "greenfield": 12,
+    "architecture": 8,
+    "mentorship": 10,
+    "mentor": 8,
+    "learning": 8,
+    "professional development": 8,
+    "vendor patching": -15,
+    "legacy maintenance": -15,
+    "tier 1": -15,
+    "tier 2": -12,
+    "helpdesk": -20,
+    "on-call rotation": -5
+  }
+}
