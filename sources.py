@@ -165,6 +165,84 @@ def fetch_greenhouse():
             print(f"Error fetching Greenhouse ({slug}): {e}")
     return jobs
 
+def fetch_lever():
+    jobs = []
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+        companies = config.get("lever_companies", [])
+    except Exception:
+        companies = []
+
+    base_url = "https://" + "api.lever.co/v0/postings/"
+    for slug in companies:
+        try:
+            url = f"{base_url}{slug}"
+            response = requests.get(url, params={"mode": "json"}, headers=HEADERS, timeout=15)
+            if response.status_code != 200:
+                continue
+            data = response.json()
+            for raw in data:
+                categories = raw.get("categories") or {}
+                location_name = categories.get("location", "")
+                workplace = raw.get("workplaceType", "")
+                if workplace == "remote" and "remote" not in location_name.lower():
+                    location_name = f"Remote - {location_name}" if location_name else "Remote"
+
+                jobs.append({
+                    "source": f"lever ({slug})",
+                    "company": slug.capitalize(),
+                    "title": raw.get("text", ""),
+                    "location": location_name,
+                    "salary_max": 0,
+                    "description": raw.get("descriptionPlain", "") or raw.get("description", ""),
+                    "tags": ["lever", categories.get("team", "")],
+                    "url": raw.get("hostedUrl", ""),
+                    "apply_url": raw.get("applyUrl") or raw.get("hostedUrl", "")
+                })
+        except Exception as e:
+            print(f"Error fetching Lever ({slug}): {e}")
+    return jobs
+
+
+def fetch_ashby():
+    jobs = []
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+        companies = config.get("ashby_companies", [])
+    except Exception:
+        companies = []
+
+    base_url = "https://" + "api.ashbyhq.com" + "/posting-api/job-board/"
+
+    for slug in companies:
+        try:
+            url = f"{base_url}{slug}"
+            response = requests.get(url, headers=HEADERS, timeout=15)
+            if response.status_code != 200:
+                continue
+            data = response.json()
+            for raw in data.get("jobs", []):
+                location_name = raw.get("location", "")
+                if raw.get("isRemote") and "remote" not in location_name.lower():
+                    location_name = f"Remote - {location_name}" if location_name else "Remote"
+
+                jobs.append({
+                    "source": f"ashby ({slug})",
+                    "company": slug.capitalize(),
+                    "title": raw.get("title", ""),
+                    "location": location_name,
+                    "salary_max": 0,
+                    "description": raw.get("descriptionPlain", "") or raw.get("descriptionHtml", ""),
+                    "tags": ["ashby", raw.get("department", "")],
+                    "url": raw.get("jobUrl", ""),
+                    "apply_url": raw.get("applyUrl") or raw.get("jobUrl", "")
+                })
+        except Exception as e:
+            print(f"Error fetching Ashby ({slug}): {e}")
+    return jobs
+
 def fetch_all_jobs():
     all_jobs = []
     all_jobs.extend(fetch_remoteok())
@@ -172,6 +250,8 @@ def fetch_all_jobs():
     all_jobs.extend(fetch_jobicy())
     all_jobs.extend(fetch_weworkremotely())
     all_jobs.extend(fetch_greenhouse())
+    all_jobs.extend(fetch_lever())
+    all_jobs.extend(fetch_ashby())
     return all_jobs
 
 
