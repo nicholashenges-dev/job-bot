@@ -1,5 +1,10 @@
 {
   "ntfy_topic": "your-private-ntfy-topic",
+      "rapidapi_key": "your-rapidapi-key",
+  "jsearch_queries": [
+    "backend software engineer remote",
+    "software engineer Buffalo NY"
+  ],
   "min_salary": 85000,
   "top_match_score": 20,
   "min_save_score": 15,

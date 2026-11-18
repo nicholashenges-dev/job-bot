@@ -243,6 +243,65 @@ def fetch_ashby():
             print(f"Error fetching Ashby ({slug}): {e}")
     return jobs
 
+def fetch_jsearch():
+    jobs = []
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+        api_key = config.get("rapidapi_key", "")
+        queries = config.get("jsearch_queries", [])
+    except Exception:
+        return jobs
+
+    if not api_key or api_key == "your-rapidapi-key":
+        return jobs
+
+    host = "jsearch.p." + "rapidapi.com"
+    url = "https://" + host + "/search"
+    headers = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": host
+    }
+
+    for query in queries:
+        try:
+            params = {
+                "query": query,
+                "page": "1",
+                "num_pages": "1",
+                "date_posted": "week"
+            }
+            response = requests.get(url, headers=headers, params=params, timeout=20)
+            if response.status_code != 200:
+                print(f"JSearch error ({query}): status {response.status_code}")
+                continue
+            data = response.json()
+            for raw in data.get("data", []):
+                city = raw.get("job_city") or ""
+                state = raw.get("job_state") or ""
+                country = raw.get("job_country") or ""
+                loc_parts = [p for p in [city, state, country] if p]
+                location_name = ", ".join(loc_parts)
+                if raw.get("job_is_remote") and "remote" not in location_name.lower():
+                    location_name = f"Remote - {location_name}" if location_name else "Remote"
+
+                publisher = raw.get("job_publisher") or "jsearch"
+                jobs.append({
+                    "source": f"jsearch ({publisher})",
+                    "company": raw.get("employer_name", ""),
+                    "title": raw.get("job_title", ""),
+                    "location": location_name,
+                    "salary_max": raw.get("job_max_salary") or 0,
+                    "description": raw.get("job_description", ""),
+                    "tags": ["jsearch", publisher.lower()],
+                    "url": raw.get("job_apply_link", ""),
+                    "apply_url": raw.get("job_apply_link", "")
+                })
+        except Exception as e:
+            print(f"Error fetching JSearch ({query}): {e}")
+    return jobs
+
+
 def fetch_all_jobs():
     all_jobs = []
     all_jobs.extend(fetch_remoteok())
@@ -252,6 +311,8 @@ def fetch_all_jobs():
     all_jobs.extend(fetch_greenhouse())
     all_jobs.extend(fetch_lever())
     all_jobs.extend(fetch_ashby())
+    all_jobs.extend(fetch_jsearch())
     return all_jobs
+
 
 
