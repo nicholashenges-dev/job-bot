@@ -50,6 +50,10 @@ def score_job(job):
         return None
     if any(loc in location for loc in DISQUALIFIED_LOCATIONS):
         return None
+    allowed_locations = ["remote", "anywhere", "worldwide", "usa", "united states", "buffalo", "hamburg"]
+    if location and not any(allowed in location for allowed in allowed_locations):
+        return None
+
 
 
     # 2. Hard filter: Skip jobs requiring 3+ days in office
@@ -169,7 +173,9 @@ bad_title_keywords = {
     "technical support": -20,
     "recruiter": -20,
     "business development": -20,
-    "sales": -20
+    "sales": -20,
+    "finance manager": -20,
+    "project manager": -15
 }
 
 resume_skills = {
@@ -235,10 +241,13 @@ DISQUALIFIED_REGIONS = [
 ]
 
 DISQUALIFIED_LOCATIONS = [
-    "canada", "china", "europe", "uk", "united kingdom",
-    "australia", "new zealand", "france", "spain", "poland",
-    "netherlands", "sweden", "japan", "taiwan", "argentina", "chile"
+    "canada", "toronto", "vancouver", "montreal", "china", "europe",
+    "uk", "united kingdom", "london", "dublin", "berlin", "australia",
+    "sydney", "new zealand", "france", "spain", "poland", "netherlands",
+    "sweden", "japan", "tokyo", "taiwan", "singapore", "india",
+    "bengaluru", "argentina", "chile", "mexico", "brazil"
 ]
+
 
 TOO_MANY_OFFICE_DAYS = [
     "3 days", "three days", "4 days", "four days", "5 days", "five days",

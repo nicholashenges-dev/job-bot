@@ -129,7 +129,38 @@ def fetch_weworkremotely():
             print(f"Error fetching We Work Remotely ({feed_url}): {e}")
     return jobs
 
-
+def fetch_greenhouse():
+    jobs = []
+    # Add or remove any company Greenhouse board slug here
+    companies = [
+        "stripe", "plaid", "cloudflare", "gitlab",
+        "coinbase", "affirm", "datadog", "dropbox"
+    ]
+    base_url = "https://" + "boards-api.greenhouse.io/v1/boards/"
+    for slug in companies:
+        try:
+            url = f"{base_url}{slug}/jobs"
+            response = requests.get(url, params={"content": "true"}, headers=HEADERS, timeout=15)
+            if response.status_code != 200:
+                continue
+            data = response.json()
+            for raw in data.get("jobs", []):
+                location_obj = raw.get("location") or {}
+                location_name = location_obj.get("name", "")
+                jobs.append({
+                    "source": f"greenhouse ({slug})",
+                    "company": slug.capitalize(),
+                    "title": raw.get("title", ""),
+                    "location": location_name,
+                    "salary_max": 0,
+                    "description": raw.get("content", ""),
+                    "tags": ["greenhouse"],
+                    "url": raw.get("absolute_url", ""),
+                    "apply_url": raw.get("absolute_url", "")
+                })
+        except Exception as e:
+            print(f"Error fetching Greenhouse ({slug}): {e}")
+    return jobs
 
 def fetch_all_jobs():
     all_jobs = []
@@ -137,5 +168,7 @@ def fetch_all_jobs():
     all_jobs.extend(fetch_remotive())
     all_jobs.extend(fetch_jobicy())
     all_jobs.extend(fetch_weworkremotely())
+    all_jobs.extend(fetch_greenhouse())
     return all_jobs
+
 
