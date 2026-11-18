@@ -1,4 +1,6 @@
 import requests
+import xml.etree.ElementTree as ET
+
 
 HEADERS = {
     "Accept": "application/json"
@@ -85,9 +87,55 @@ def fetch_jobicy():
         print(f"Error fetching Jobicy: {e}")
     return jobs
 
+def fetch_weworkremotely():
+    jobs = []
+    base = "https://" + "weworkremotely.com" + "/categories/"
+    feeds = [
+        base + "remote-back-end-programming-jobs.rss",
+        base + "remote-full-stack-programming-jobs.rss"
+    ]
+    rss_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/rss+xml, application/xml, text/xml;q=0.9,*/*;q=0.8"
+    }
+    for feed_url in feeds:
+        try:
+            response = requests.get(feed_url, headers=rss_headers, timeout=15)
+            response.raise_for_status()
+            root = ET.fromstring(response.content)
+            for item in root.findall("./channel/item"):
+                raw_title = item.findtext("title", "")
+                if ":" in raw_title:
+                    company, title = [part.strip() for part in raw_title.split(":", 1)]
+                else:
+                    company, title = "Unknown", raw_title.strip()
+
+                region = item.findtext("region", "") or "Remote"
+                link = item.findtext("link", "")
+                description = item.findtext("description", "")
+
+                jobs.append({
+                    "source": "weworkremotely",
+                    "company": company,
+                    "title": title,
+                    "location": region,
+                    "salary_max": 0,
+                    "description": description,
+                    "tags": ["remote"],
+                    "url": link,
+                    "apply_url": link
+                })
+        except Exception as e:
+            print(f"Error fetching We Work Remotely ({feed_url}): {e}")
+    return jobs
+
+
+
 def fetch_all_jobs():
     all_jobs = []
     all_jobs.extend(fetch_remoteok())
     all_jobs.extend(fetch_remotive())
     all_jobs.extend(fetch_jobicy())
+    all_jobs.extend(fetch_weworkremotely())
     return all_jobs
+
