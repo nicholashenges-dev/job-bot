@@ -105,8 +105,6 @@ def score_job(job):
 
     return None
 
-print("Job Bot Started")
-
 good_tags = {
     "backend": 10,
     "python": 8,
@@ -239,85 +237,91 @@ NON_FULLTIME_PHRASES = [
     "freelance", "part-time", "part time",
     "commission only", "uncapped commission", "per task", "10 hours"
 ]
+def run_search():
+    jobs = fetch_all_jobs()
+    print(f"Retrieved {len(jobs)} total records across all sources\n")
 
-jobs = fetch_all_jobs()
-print(f"Retrieved {len(jobs)} total records across all sources\n")
+    init_db()
+    results = []
 
-init_db()
-results = []
+    for job in jobs:
+        if job_exists(job.get("company"), job.get("title")):
+            continue
 
-for job in jobs:
-    if job_exists(job.get("company"), job.get("title")):
-        continue
+        scored = score_job(job)
+        if scored:
+            results.append(scored)
 
-    scored = score_job(job)
-    if scored:
-        results.append(scored)
+    results.sort(key=lambda x: x["score"], reverse=True)
 
-results.sort(key=lambda x: x["score"], reverse=True)
+    top_matches = []
+    strong_matches = []
 
-top_matches = []
-strong_matches = []
+    strong_matches_count = len(results)
 
-strong_matches_count = len(results)
-
-for result in results:
-    if result["score"] >= TOP_MATCH_SCORE:
-        top_matches.append(result)
-    else:
-        strong_matches.append(result)
-
-print()
-print(f"Strong matches found: {strong_matches_count}")
-print()
-
-print("TOP MATCHES")
-print("-----------")
-print()
-
-for result in top_matches:
-    print("------------------")
-    print(f"Score: {result['score']}")
-    print(f"Company: {result['company']}")
-    print(f"Position: {result['position']}")
-    print(f"Location: {result['location'] or 'Remote'}")
-    print(f"Apply URL: {result['apply_url']}")
-
+    for result in results:
+        if result["score"] >= TOP_MATCH_SCORE:
+            top_matches.append(result)
+        else:
+            strong_matches.append(result)
 
     print()
-    print(result["description"][:1000])
+    print(f"Strong matches found: {strong_matches_count}")
     print()
 
-    print(f"Tags: {', '.join(result['tags'])}")
+    print("TOP MATCHES")
+    print("-----------")
     print()
 
-print("OTHER STRONG MATCHES")
-print("--------------------")
-print()
-
-for result in strong_matches:
-    if result["score"] < 15:
-        continue
-
-    print("------------------")
-    print(f"Score: {result['score']}")
-    print(f"Company: {result['company']}")
-    print(f"Position: {result['position']}")
-    print(f"Location: {result['location'] or 'Remote'}")
-    print(f"Apply URL: {result['apply_url']}")
+    for result in top_matches:
+        print("------------------")
+        print(f"Score: {result['score']}")
+        print(f"Company: {result['company']}")
+        print(f"Position: {result['position']}")
+        print(f"Location: {result['location'] or 'Remote'}")
+        print(f"Apply URL: {result['apply_url']}")
 
 
-    print()
-    print(result["description"][:1000])
-    print()
+        print()
+        print(result["description"][:1000])
+        print()
 
-    print(f"Tags: {', '.join(result['tags'])}")
+        print(f"Tags: {', '.join(result['tags'])}")
+        print()
+
+    print("OTHER STRONG MATCHES")
+    print("--------------------")
     print()
 
-new_saved = 0
-for result in results:
-    if result["score"] >= 15:
-        save_job(result, source=result.get("source", "unknown"))
-        new_saved += 1
+    for result in strong_matches:
+        if result["score"] < 15:
+            continue
 
-print(f"Saved {new_saved} new matches to jobs.db.")
+        print("------------------")
+        print(f"Score: {result['score']}")
+        print(f"Company: {result['company']}")
+        print(f"Position: {result['position']}")
+        print(f"Location: {result['location'] or 'Remote'}")
+        print(f"Apply URL: {result['apply_url']}")
+
+
+        print()
+        print(result["description"][:1000])
+        print()
+
+        print(f"Tags: {', '.join(result['tags'])}")
+        print()
+
+    new_saved = 0
+    for result in results:
+        if result["score"] >= 15:
+            save_job(result, source=result.get("source", "unknown"))
+            new_saved += 1
+
+    print(f"Saved {new_saved} new matches to jobs.db.")
+    return new_saved
+
+if __name__ == "__main__":
+    print("Job Bot Started")    
+    run_search()
+

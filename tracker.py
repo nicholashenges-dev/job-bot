@@ -77,3 +77,9 @@ def update_job_status(job_id, status, notes="", offer_amount=""):
                 SET status = ?, notes = ?, offer_amount = ?
                 WHERE id = ?
             """, (status, notes, offer_amount, job_id))
+
+def mark_all_new_as_seen():
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.execute("UPDATE jobs SET status = 'seen' WHERE status = 'new'")
+        return cursor.rowcount
+
