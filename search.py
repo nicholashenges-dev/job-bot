@@ -28,7 +28,7 @@ def send_phone_alert(new_count, top_matches):
     message = f"Found {new_count} new job match(es)!\n\nTop picks:\n{top_lines}"
     try:
         requests.post(
-            f"https://ntfy.sh{NTFY_TOPIC}",
+            f"https://ntfy.sh/{NTFY_TOPIC}",
             data=message.encode("utf-8"),
             headers={"Title": "Job Bot Alert", "Tags": "briefcase"},
             timeout=10
