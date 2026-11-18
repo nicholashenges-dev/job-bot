@@ -16,6 +16,27 @@ def clean_description(raw_text):
     # 4. Collapse extra spaces and blank lines into clean single spaces
     return re.sub(r"\s+", " ", text).strip()
 
+NTFY_TOPIC = "nbhjobnotify_20261118"
+
+def send_phone_alert(new_count, top_matches):
+    if new_count <= 0:
+        return
+    top_lines = "\n".join(
+        f"• {job['position']} @ {job['company']} (Score: {job['score']})"
+        for job in top_matches[:3]
+    )
+    message = f"Found {new_count} new job match(es)!\n\nTop picks:\n{top_lines}"
+    try:
+        requests.post(
+            f"https://ntfy.sh{NTFY_TOPIC}",
+            data=message.encode("utf-8"),
+            headers={"Title": "Job Bot Alert", "Tags": "briefcase"},
+            timeout=10
+        )
+    except Exception as e:
+        print(f"Phone alert failed: {e}")
+
+
 def score_job(job):
     tags = job.get("tags", [])
     title = job.get("title", "").lower()
@@ -319,6 +340,8 @@ def run_search():
             new_saved += 1
 
     print(f"Saved {new_saved} new matches to jobs.db.")
+    saved_jobs = [r for r in results if r["score"] >= 15]
+    send_phone_alert(new_saved, saved_jobs)
     return new_saved
 
 if __name__ == "__main__":
