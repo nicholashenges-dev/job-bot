@@ -22,6 +22,7 @@
   "ashby_companies": [
     "linear", "ramp", "notion", "deel", "render", "supabase"
   ],
+  "workable_companies": [],
   "good_title_keywords": {
     "backend": 15,
     "platform": 15,

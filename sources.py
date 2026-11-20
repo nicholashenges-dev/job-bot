@@ -113,7 +113,13 @@ def fetch_weworkremotely():
                     company, title = "Unknown", raw_title.strip()
 
                 region = item.findtext("region", "") or "Remote"
-                link = item.findtext("link", "")
+
+                guid = (item.findtext("guid") or "").strip()
+                link = (item.findtext("link") or "").strip()
+                job_url = guid if guid.startswith("http") else link
+                if job_url and not job_url.startswith("http"):
+                    job_url = "https://" + "weworkremotely.com" + ("" if job_url.startswith("/") else "/") + job_url
+
                 description = item.findtext("description", "")
 
                 jobs.append({
@@ -124,12 +130,13 @@ def fetch_weworkremotely():
                     "salary_max": 0,
                     "description": description,
                     "tags": ["remote"],
-                    "url": link,
-                    "apply_url": link
+                    "url": job_url,
+                    "apply_url": job_url
                 })
         except Exception as e:
             print(f"Error fetching We Work Remotely ({feed_url}): {e}")
     return jobs
+
 
 def fetch_greenhouse():
     jobs = []
@@ -257,7 +264,7 @@ def fetch_jsearch():
         return jobs
 
     host = "jsearch.p." + "rapidapi.com"
-    url = "https://" + host + "/search"
+    url = "https://" + host + "/search-v2"
     headers = {
         "X-RapidAPI-Key": api_key,
         "X-RapidAPI-Host": host
@@ -269,14 +276,15 @@ def fetch_jsearch():
                 "query": query,
                 "page": "1",
                 "num_pages": "1",
-                "date_posted": "week"
+                "date_posted": "week",
+                "country": "us"
             }
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
                 print(f"JSearch error ({query}): status {response.status_code}")
                 continue
             data = response.json()
-            for raw in data.get("data", []):
+            for raw in data.get("data", {}).get("jobs", []):
                 city = raw.get("job_city") or ""
                 state = raw.get("job_state") or ""
                 country = raw.get("job_country") or ""
@@ -301,6 +309,144 @@ def fetch_jsearch():
             print(f"Error fetching JSearch ({query}): {e}")
     return jobs
 
+def fetch_himalayas():
+    jobs = []
+    try:
+        url = "https://" + "himalayas.app/jobs/api"
+        params = {"limit": 50}
+        response = requests.get(url, params=params, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        for raw in data.get("jobs", []):
+            restrictions = raw.get("locationRestrictions") or []
+            location_name = ", ".join(restrictions) if restrictions else "Remote"
+            if "remote" not in location_name.lower():
+                location_name = f"Remote - {location_name}"
+            jobs.append({
+                "source": "himalayas",
+                "company": raw.get("companyName", ""),
+                "title": raw.get("title", ""),
+                "location": location_name,
+                "salary_max": raw.get("maxSalary") or 0,
+                "description": raw.get("description", ""),
+                "tags": ["himalayas"] + (raw.get("categories") or []),
+                "url": raw.get("applicationLink") or raw.get("guid", ""),
+                "apply_url": raw.get("applicationLink") or raw.get("guid", "")
+            })
+    except Exception as e:
+        print(f"Error fetching Himalayas: {e}")
+    return jobs
+
+
+def fetch_workingnomads():
+    jobs = []
+    try:
+        url = "".join(["https://", "www.workingnomads", ".com/api/exposed_jobs/"])
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        for raw in data:
+            category = (raw.get("category_name") or "").lower()
+            if "dev" not in category and "engineer" not in category and "sysadmin" not in category:
+                continue
+            location_name = (raw.get("location") or "").strip() or "Remote"
+            tags = [t.strip() for t in (raw.get("tags") or "").split(",") if t.strip()]
+            jobs.append({
+                "source": "workingnomads",
+                "company": raw.get("company_name", ""),
+                "title": raw.get("title", ""),
+                "location": location_name,
+                "salary_max": 0,
+                "description": raw.get("description", ""),
+                "tags": ["workingnomads"] + tags,
+                "url": raw.get("url", ""),
+                "apply_url": raw.get("url", "")
+            })
+    except Exception as e:
+        print(f"Error fetching Working Nomads: {e}")
+    return jobs
+
+
+
+def fetch_arbeitnow():
+    jobs = []
+    try:
+        url = "".join(["https://", "www.arbeitnow", ".com/api/job-board-api"])
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        items = data if isinstance(data, list) else data.get("data", [])
+        eu_markers = ("remote uk", "remote netherlands", "remote germany", "remote france", "£", "€")
+        for raw in items:
+            job_url = raw.get("url", "")
+            desc_lower = (raw.get("description") or "").lower()
+            if ".co.uk/" in job_url or ".nl/" in job_url or ".de/" in job_url:
+                continue
+            if any(marker in desc_lower for marker in eu_markers):
+                continue
+            location_name = raw.get("location", "")
+            if raw.get("remote") and "remote" not in location_name.lower():
+                location_name = f"Remote - {location_name}" if location_name else "Remote"
+            jobs.append({
+                "source": "arbeitnow",
+                "company": raw.get("company_name", ""),
+                "title": raw.get("title", ""),
+                "location": location_name,
+                "salary_max": 0,
+                "description": raw.get("description", ""),
+                "tags": ["arbeitnow"] + (raw.get("tags") or []),
+                "url": job_url,
+                "apply_url": job_url
+            })
+    except Exception as e:
+        print(f"Error fetching Arbeitnow: {e}")
+    return jobs
+
+
+
+def fetch_workable():
+    jobs = []
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+        companies = config.get("workable_companies", [])
+    except Exception:
+        companies = []
+
+    base_url = "".join(["https://", "apply.workable", ".com/api/v3/accounts/"])
+    for slug in companies:
+        try:
+            url = f"{base_url}{slug}/jobs"
+            response = requests.post(url, json={"query": "", "location": [], "department": [], "worktype": []}, headers=HEADERS, timeout=15)
+            if response.status_code != 200:
+                continue
+            data = response.json()
+            for raw in data.get("results", []):
+                shortcode = raw.get("shortcode", "")
+                job_url = "".join(["https://", "apply.workable", f".com/{slug}/j/{shortcode}/"]) if shortcode else ""
+                loc = raw.get("location") or {}
+                city = loc.get("city") or ""
+                region = loc.get("region") or ""
+                country = loc.get("country") or ""
+                location_name = ", ".join([p for p in [city, region, country] if p])
+                if raw.get("remote") and "remote" not in location_name.lower():
+                    location_name = f"Remote - {location_name}" if location_name else "Remote"
+                jobs.append({
+                    "source": f"workable ({slug})",
+                    "company": slug.capitalize(),
+                    "title": raw.get("title", ""),
+                    "location": location_name,
+                    "salary_max": 0,
+                    "description": f"{raw.get('title', '')} - {raw.get('department', '')}",
+                    "tags": ["workable", raw.get("department", "")],
+                    "url": job_url,
+                    "apply_url": job_url
+                })
+        except Exception as e:
+            print(f"Error fetching Workable ({slug}): {e}")
+    return jobs
+
+
 
 def fetch_all_jobs():
     all_jobs = []
@@ -312,7 +458,12 @@ def fetch_all_jobs():
     all_jobs.extend(fetch_lever())
     all_jobs.extend(fetch_ashby())
     all_jobs.extend(fetch_jsearch())
+    all_jobs.extend(fetch_himalayas())
+    all_jobs.extend(fetch_workingnomads())
+    all_jobs.extend(fetch_arbeitnow())
+    all_jobs.extend(fetch_workable())
     return all_jobs
+
 
 
 
