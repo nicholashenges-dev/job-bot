@@ -3,7 +3,15 @@ import json
 import re
 import requests
 
-from tracker import get_active_companies, init_db, job_exists, normalize_company, save_job
+from tracker import (
+    get_active_companies,
+    get_existing_fingerprints,
+    init_db,
+    make_fingerprint,
+    normalize_company,
+    save_job,
+)
+
 from sources import fetch_all_jobs
 
 with open("config.json", "r", encoding="utf-8") as f:
@@ -285,12 +293,15 @@ def run_search():
     print(f"Retrieved {len(jobs)} total records across all sources\n")
 
     init_db()
+    existing_fps = get_existing_fingerprints()
     active_companies = get_active_companies() if HIDE_ACTIVE_COMPANIES else set()
     results = []
 
     for job in jobs:
-        if job_exists(job.get("company"), job.get("title")):
+        fp = make_fingerprint(job.get("company"), job.get("title"))
+        if fp in existing_fps:
             continue
+        existing_fps.add(fp)
 
         scored = score_job(job)
         if scored:
