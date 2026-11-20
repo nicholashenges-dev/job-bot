@@ -1,6 +1,14 @@
+import json
 from flask import Flask, redirect, render_template_string, request, url_for
 from search import run_search
-from tracker import get_all_jobs, init_db, mark_all_new_as_seen, update_job_status
+from tracker import (
+    get_active_companies,
+    get_all_jobs,
+    init_db,
+    mark_all_new_as_seen,
+    normalize_company,
+    update_job_status,
+)
 
 app = Flask(__name__)
 
@@ -100,7 +108,23 @@ def index():
     init_db()
     current_status = request.args.get("status", "all")
     message = request.args.get("message", "")
+
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+        hide_active_companies = config.get("hide_companies_with_active_applications", True)
+    except Exception:
+        hide_active_companies = True
+
     jobs = get_all_jobs()
+
+    if hide_active_companies:
+        active_companies = get_active_companies()
+        jobs = [
+            j for j in jobs
+            if not (j["status"] in ("new", "seen") and normalize_company(j["company"]) in active_companies)
+        ]
+
     if current_status != "all":
         jobs = [j for j in jobs if j["status"] == current_status]
     else:

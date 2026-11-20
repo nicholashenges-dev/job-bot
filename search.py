@@ -3,20 +3,16 @@ import json
 import re
 import requests
 
-from tracker import init_db, job_exists, save_job
+from tracker import get_active_companies, init_db, job_exists, normalize_company, save_job
 from sources import fetch_all_jobs
 
 with open("config.json", "r", encoding="utf-8") as f:
     CONFIG = json.load(f)
 
 def clean_description(raw_text):
-    # 1. Convert HTML entities like &amp; into normal characters (&)
     text = html.unescape(raw_text)
-    # 2. Cut off RemoteOK's "Please mention the word..." spam-check footer
     text = re.split(r"Please mention the word", text, flags=re.IGNORECASE)[0]
-    # 3. Strip all HTML tags like <p>, <br/>, <strong>
     text = re.sub(r"<.*?>", " ", text)
-    # 4. Collapse extra spaces and blank lines into clean single spaces
     return re.sub(r"\s+", " ", text).strip()
 
 NTFY_TOPIC = CONFIG.get("ntfy_topic", "")
@@ -31,7 +27,7 @@ def send_phone_alert(new_count, top_matches):
     message = f"Found {new_count} new job match(es)!\n\nTop picks:\n{top_lines}"
     try:
         requests.post(
-            f"https://ntfy.sh/{NTFY_TOPIC}",
+            "".join(["https://", "ntfy.sh/", NTFY_TOPIC]),
             data=message.encode("utf-8"),
             headers={"Title": "Job Bot Alert", "Tags": "briefcase"},
             timeout=10
@@ -40,7 +36,82 @@ def send_phone_alert(new_count, top_matches):
         print(f"Phone alert failed: {e}")
 
 
+def exceeds_max_office_days(full_text):
+    if MAX_OFFICE_DAYS is None:
+        return False
+
+    office_day_matches = re.findall(
+        r"\b([1-5])\s*(?:-\s*[1-5]\s*)?(?:days?|x|times)\s*(?:a\s+|per\s+|/\s*)?(?:week|wk|in[\s-]office|on[\s-]?site|onsite)?",
+        full_text
+    )
+    for num_str in office_day_matches:
+        if int(num_str) > MAX_OFFICE_DAYS:
+            return True
+
+    word_map = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+    for word, count in word_map.items():
+        if count > MAX_OFFICE_DAYS and re.search(rf"\b{word}\s+days?\b", full_text):
+            return True
+
+    if MAX_OFFICE_DAYS <= 2:
+        if re.search(r"\b(?:1|one)\s+days?\s*(?:a\s+|per\s+|/\s*)?(?:week\s+)?(?:remote|from home|wfh)\b", full_text):
+            return True
+
+    return any(phrase in full_text for phrase in TOO_MANY_OFFICE_DAYS)
+
+
+def has_confirmed_allowed_hybrid_days(full_text):
+    if MAX_OFFICE_DAYS is None:
+        return True
+    allowed_nums = [str(n) for n in range(1, MAX_OFFICE_DAYS + 1)]
+    word_map = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+    allowed_words = [word_map[n] for n in range(1, MAX_OFFICE_DAYS + 1) if n in word_map]
+
+    num_pattern = r"\b(?:" + "|".join(allowed_nums) + r")\s*(?:days?|x|times)\s*(?:a\s+|per\s+|/\s*)?(?:week|wk|in[\s-]office|on[\s-]?site|onsite)"
+    word_pattern = r"\b(?:" + "|".join(allowed_words) + r")\s+days?\s*(?:a\s+|per\s+|/\s*)?(?:week|wk|in[\s-]office|on[\s-]?site|onsite)"
+    return bool(re.search(num_pattern, full_text) or re.search(word_pattern, full_text))
+
+
+def evaluate_experience_penalty(description_lower):
+    if not MAX_REQUIRED_YEARS or MAX_REQUIRED_YEARS <= 0:
+        return False, 0
+
+    pattern = re.compile(
+        r"(?:minimum of |at least |requires? |with )?(\d{1,2})\s*(?:\+|to\s*\d{1,2}|-\s*\d{1,2})?\s*years?\s+(?:of\s+)?(?:[\w/+-]+\s+){0,4}?(?:experience|developing|development|engineering|working)",
+        re.IGNORECASE
+    )
+
+    preferred_markers = ("preferred", "nice to have", "bonus", "plus", "ideally", "desired")
+    company_history_markers = ("in business", "history", "founded", "serving clients", "industry leader")
+
+    penalty = 0
+    for match in pattern.finditer(description_lower):
+        years = int(match.group(1))
+        if years <= MAX_REQUIRED_YEARS or years > 25:
+            continue
+
+        start = max(0, match.start() - 80)
+        end = min(len(description_lower), match.end() + 80)
+        context = description_lower[start:end]
+
+        if any(marker in context for marker in company_history_markers):
+            continue
+
+        over_by = years - MAX_REQUIRED_YEARS
+        if any(marker in context for marker in preferred_markers):
+            if over_by > MAX_PREFERRED_YEARS_OVER:
+                return True, 0
+            penalty = max(penalty, over_by)
+        else:
+            return True, 0
+
+    return False, penalty
+
 def score_job(job):
+    company_norm = normalize_company(job.get("company", ""))
+    if company_norm and any(ex in company_norm for ex in EXCLUDED_COMPANIES_NORM):
+        return None
+
     tags = job.get("tags", [])
     title = job.get("title", "").lower()
     location = job.get("location", "").lower()
@@ -48,7 +119,6 @@ def score_job(job):
     description = clean_desc.lower()
     full_text = f"{title} {location} {description}"
 
-    # 1. Hard filter: Skip jobs outside US / local area
     if any(region in full_text for region in DISQUALIFIED_REGIONS):
         return None
     if any(loc in location for loc in DISQUALIFIED_LOCATIONS):
@@ -57,44 +127,43 @@ def score_job(job):
     if location and not any(allowed in location for allowed in allowed_locations):
         return None
 
-
-
-    # 2. Hard filter: Skip jobs requiring 3+ days in office
-    if any(phrase in full_text for phrase in TOO_MANY_OFFICE_DAYS):
+    if exceeds_max_office_days(full_text):
         return None
 
-    # 3. Hard filter: Skip if salary is explicitly listed below $85,000
     salary_max = job.get("salary_max") or 0
     if isinstance(salary_max, (int, float)) and 0 < salary_max < MIN_SALARY:
         return None
 
-    # 4. Hard filter: Skip customer-facing & pure support roles
     if any(keyword in title for keyword in bad_title_keywords):
         return None
     if any(phrase in description for phrase in CUSTOMER_FACING_PHRASES):
         return None
 
-    # 5. Hard filter: Skip non-full-time, freelance, task-based, and commission roles
     if any(phrase in full_text for phrase in NON_FULLTIME_PHRASES):
+        return None
+
+    should_block_exp, exp_penalty = evaluate_experience_penalty(description)
+    if should_block_exp:
         return None
 
     match_found = False
     bad_match = False
-    score = 0
+    score = -exp_penalty
 
-    # 6. Check if local (within ~25 mins of Hamburg) or Remote
     is_local = any(city in full_text for city in LOCAL_CITIES)
     is_hybrid = "hybrid" in full_text
     is_remote = "remote" in full_text or location == ""
 
-    if is_hybrid and is_local:
+    if is_hybrid:
+        if not is_local and not is_remote:
+            return None
+        if REQUIRE_CONFIRMED_HYBRID_DAYS and not is_remote and not has_confirmed_allowed_hybrid_days(full_text):
+            return None
         score += HYBRID_BONUS
-    elif is_hybrid and not is_local and location != "" and "remote" not in location:
-        return None
     elif is_remote:
         score += REMOTE_BONUS
     else:
-        score += ONSITE_PENALTY
+        return None
 
     for keyword in good_title_keywords:
         if keyword in title:
@@ -159,13 +228,20 @@ builder_keywords = CONFIG.get("builder_keywords", {})
 TOP_MATCH_SCORE = CONFIG.get("top_match_score", 20)
 MIN_SAVE_SCORE = CONFIG.get("min_save_score", 15)
 MIN_SALARY = CONFIG.get("min_salary", 85000)
+MAX_OFFICE_DAYS = CONFIG.get("max_office_days", 2)
+REQUIRE_CONFIRMED_HYBRID_DAYS = CONFIG.get("require_confirmed_hybrid_days", True)
+MAX_REQUIRED_YEARS = CONFIG.get("max_required_years_experience", 6)
+MAX_PREFERRED_YEARS_OVER = CONFIG.get("max_preferred_years_over", 3)
+HIDE_ACTIVE_COMPANIES = CONFIG.get("hide_companies_with_active_applications", True)
+EXCLUDED_COMPANIES_NORM = [
+    normalize_company(c) for c in CONFIG.get("excluded_companies", []) if normalize_company(c)
+]
 
 REMOTE_BONUS = 20
 HYBRID_BONUS = 10
 ONSITE_PENALTY = -25
 
 LOCAL_CITIES = CONFIG.get("local_cities", [])
-
 
 DISQUALIFIED_REGIONS = [
     "emea", "latam", "apac", "europe only", "european time zones",
@@ -183,10 +259,11 @@ DISQUALIFIED_LOCATIONS = [
     "bengaluru", "argentina", "chile", "mexico", "brazil"
 ]
 
-
 TOO_MANY_OFFICE_DAYS = [
     "3 days", "three days", "4 days", "four days", "5 days", "five days",
-    "100% onsite", "100% on-site", "fully onsite", "fully on-site"
+    "100% onsite", "100% on-site", "fully onsite", "fully on-site",
+    "in-office 4", "in office 4", "in-office 3", "in office 3",
+    "majority in office", "majority in-office"
 ]
 
 CUSTOMER_FACING_PHRASES = [
@@ -202,11 +279,13 @@ NON_FULLTIME_PHRASES = [
     "freelance", "part-time", "part time",
     "commission only", "uncapped commission", "per task", "10 hours"
 ]
+
 def run_search():
     jobs = fetch_all_jobs()
     print(f"Retrieved {len(jobs)} total records across all sources\n")
 
     init_db()
+    active_companies = get_active_companies() if HIDE_ACTIVE_COMPANIES else set()
     results = []
 
     for job in jobs:
@@ -245,12 +324,9 @@ def run_search():
         print(f"Position: {result['position']}")
         print(f"Location: {result['location'] or 'Remote'}")
         print(f"Apply URL: {result['apply_url']}")
-
-
         print()
         print(result["description"][:1000])
         print()
-
         print(f"Tags: {', '.join(result['tags'])}")
         print()
 
@@ -268,28 +344,26 @@ def run_search():
         print(f"Position: {result['position']}")
         print(f"Location: {result['location'] or 'Remote'}")
         print(f"Apply URL: {result['apply_url']}")
-
-
         print()
         print(result["description"][:1000])
         print()
-
         print(f"Tags: {', '.join(result['tags'])}")
         print()
 
     new_saved = 0
+    alertable_jobs = []
     for result in results:
         if result["score"] >= MIN_SAVE_SCORE:
             save_job(result, source=result.get("source", "unknown"))
             new_saved += 1
+            if normalize_company(result.get("company", "")) not in active_companies:
+                alertable_jobs.append(result)
 
     print(f"Saved {new_saved} new matches to jobs.db.")
-    saved_jobs = [r for r in results if r["score"] >= MIN_SAVE_SCORE]
-    send_phone_alert(new_saved, saved_jobs)
-    return new_saved
+    send_phone_alert(len(alertable_jobs), alertable_jobs)
+    return len(alertable_jobs)
 
 
 if __name__ == "__main__":
-    print("Job Bot Started")    
+    print("Job Bot Started")
     run_search()
-

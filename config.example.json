@@ -6,6 +6,13 @@
     "software engineer Buffalo NY"
   ],
   "min_salary": 85000,
+  "hide_companies_with_active_applications": true,
+  "excluded_companies": [],
+  "max_required_years_experience": 6,
+  "max_preferred_years_over": 3,
+  "max_office_days": 2,
+  "require_confirmed_hybrid_days": true,
+
   "top_match_score": 20,
   "min_save_score": 15,
   "local_cities": [
