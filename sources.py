@@ -1,7 +1,21 @@
 import json
+import os
 import requests
 import xml.etree.ElementTree as ET
 
+
+def load_config():
+    env_cfg = os.environ.get("CONFIG_JSON", "").strip()
+    if env_cfg:
+        try:
+            return json.loads(env_cfg)
+        except Exception:
+            pass
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 
 HEADERS = {
@@ -141,8 +155,7 @@ def fetch_weworkremotely():
 def fetch_greenhouse():
     jobs = []
     try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = load_config()
         companies = config.get("greenhouse_companies", [])
     except Exception:
         companies = ["stripe", "plaid", "cloudflare", "gitlab"]
@@ -175,8 +188,7 @@ def fetch_greenhouse():
 def fetch_lever():
     jobs = []
     try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = load_config()
         companies = config.get("lever_companies", [])
     except Exception:
         companies = []
@@ -215,8 +227,7 @@ def fetch_lever():
 def fetch_ashby():
     jobs = []
     try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = load_config()
         companies = config.get("ashby_companies", [])
     except Exception:
         companies = []
@@ -253,8 +264,7 @@ def fetch_ashby():
 def fetch_jsearch():
     jobs = []
     try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = load_config()
         api_key = config.get("rapidapi_key", "")
         queries = config.get("jsearch_queries", [])
     except Exception:
@@ -407,12 +417,10 @@ def fetch_arbeitnow():
 def fetch_workable():
     jobs = []
     try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = load_config()
         companies = config.get("workable_companies", [])
     except Exception:
         companies = []
-
     base_url = "".join(["https://", "apply.workable", ".com/api/v3/accounts/"])
     for slug in companies:
         try:

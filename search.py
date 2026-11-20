@@ -1,5 +1,6 @@
 import html
 import json
+import os
 import re
 import requests
 
@@ -11,11 +12,15 @@ from tracker import (
     normalize_company,
     save_job,
 )
-
 from sources import fetch_all_jobs
 
-with open("config.json", "r", encoding="utf-8") as f:
-    CONFIG = json.load(f)
+if os.environ.get("CONFIG_JSON", "").strip():
+    CONFIG = json.loads(os.environ["CONFIG_JSON"])
+else:
+    with open("config.json", "r", encoding="utf-8") as f:
+        CONFIG = json.load(f)
+
+
 
 def clean_description(raw_text):
     text = html.unescape(raw_text)

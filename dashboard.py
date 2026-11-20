@@ -1,5 +1,6 @@
 import json
-from flask import Flask, redirect, render_template_string, request, url_for
+import os
+from flask import Flask, redirect, render_template_string, request, session, url_for
 from search import run_search
 from tracker import (
     get_active_companies,
@@ -11,6 +12,71 @@ from tracker import (
 )
 
 app = Flask(__name__)
+
+def load_config():
+    env_cfg = os.environ.get("CONFIG_JSON", "").strip()
+    if env_cfg:
+        try:
+            return json.loads(env_cfg)
+        except Exception:
+            pass
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+app.secret_key = load_config().get("dashboard_password") or "local-dev-secret-key"
+
+LOGIN_TEMPLATE = """
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Bot Login</title>
+  <style>
+    body { font-family: sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    form { background: #1e293b; padding: 2rem; border-radius: 10px; width: 90%; max-width: 340px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+    input { width: 100%; padding: 0.75rem; margin: 0.75rem 0 1rem; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff; box-sizing: border-box; font-size: 16px; }
+    button { width: 100%; padding: 0.75rem; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .err { color: #f87171; font-size: 0.9rem; margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+  <form method="post">
+    <h2 style="margin-top:0;">Job Bot Login</h2>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    <input type="password" name="password" placeholder="Enter dashboard password" required autofocus>
+    <button type="submit">Unlock Dashboard</button>
+  </form>
+</body>
+</html>
+"""
+
+@app.before_request
+def require_login():
+    pw = (load_config().get("dashboard_password") or "").strip()
+    if not pw:
+        return None
+    if request.endpoint == "login":
+        return None
+    if not session.get("authenticated"):
+        return redirect(url_for("login"))
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    pw = (load_config().get("dashboard_password") or "").strip()
+    if not pw:
+        return redirect(url_for("index"))
+    error = ""
+    if request.method == "POST":
+        if request.form.get("password") == pw:
+            session["authenticated"] = True
+            session.permanent = True
+            return redirect(url_for("index"))
+        error = "Incorrect password."
+    return render_template_string(LOGIN_TEMPLATE, error=error)
+
 
 STATUSES = ["new", "seen", "applied", "contacted", "interviewing", "rejected", "offer", "archived"]
 
@@ -109,12 +175,7 @@ def index():
     current_status = request.args.get("status", "all")
     message = request.args.get("message", "")
 
-    try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            config = json.load(f)
-        hide_active_companies = config.get("hide_companies_with_active_applications", True)
-    except Exception:
-        hide_active_companies = True
+    hide_active_companies = load_config().get("hide_companies_with_active_applications", True)
 
     jobs = get_all_jobs()
 
