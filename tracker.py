@@ -127,7 +127,7 @@ def get_active_companies():
                     f"SELECT DISTINCT company FROM jobs WHERE status IN ({placeholders})",
                     ACTIVE_APPLICATION_STATUSES
                 )
-                return {normalize_company(row) for row in cur.fetchall() if normalize_company(row)}
+                return {normalize_company(row[0]) for row in cur.fetchall() if normalize_company(row[0])}
 
     with sqlite3.connect(DB_FILE) as conn:
         placeholders = ",".join("?" for _ in ACTIVE_APPLICATION_STATUSES)
@@ -135,7 +135,7 @@ def get_active_companies():
             f"SELECT DISTINCT company FROM jobs WHERE status IN ({placeholders})",
             ACTIVE_APPLICATION_STATUSES
         )
-        return {normalize_company(row) for row in cursor.fetchall() if normalize_company(row)}
+        return {normalize_company(row[0]) for row in cursor.fetchall() if normalize_company(row[0])}
 
 
 def save_job(job, source="remoteok"):
